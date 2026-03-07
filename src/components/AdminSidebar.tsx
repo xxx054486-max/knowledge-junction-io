@@ -3,15 +3,8 @@ import { X, LayoutDashboard, Users, BookOpen, Video, Settings, LogOut, Sun, Moon
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 interface Props {
@@ -45,6 +38,10 @@ export function AdminSidebar({ open, onClose }: Props) {
           <SidebarLink to="/admin/courses" icon={BookOpen} label="Courses" onClick={onClose} />
           <SidebarLink to="/admin/videos" icon={Video} label="Videos" onClick={onClose} />
           <SidebarLink to="/admin/settings" icon={Settings} label="Settings" onClick={onClose} />
+
+          <div className="my-2 border-t border-border" />
+
+          <SidebarLink to="/admin/data" icon={Download} label="Import / Export Data" onClick={onClose} />
 
           <div className="my-2 border-t border-border" />
 
