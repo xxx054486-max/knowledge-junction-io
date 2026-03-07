@@ -32,17 +32,23 @@ export default function MyCoursesPage() {
     }
 
     const fetchVideos = async () => {
-      const q = query(
-        collection(db, "videos"),
-        where("courseId", "==", courseId),
-        orderBy("order", "asc")
-      );
-      const snap = await getDocs(q);
-      const vids = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Video));
-      setVideos(vids);
+      try {
+        // Use simple query without orderBy to avoid composite index requirement
+        const q = query(
+          collection(db, "videos"),
+          where("courseId", "==", courseId)
+        );
+        const snap = await getDocs(q);
+        const vids = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Video));
+        // Sort client-side
+        vids.sort((a, b) => (a.order || 0) - (b.order || 0));
+        setVideos(vids);
 
-      const subs = [...new Set(vids.map((v) => v.subjectName))];
-      setSubjects(subs);
+        const subs = [...new Set(vids.map((v) => v.subjectName).filter(Boolean))];
+        setSubjects(subs);
+      } catch (err) {
+        console.error("Error fetching videos:", err);
+      }
       setLoading(false);
     };
     fetchVideos();
