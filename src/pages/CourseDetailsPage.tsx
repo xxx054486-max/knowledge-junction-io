@@ -99,14 +99,18 @@ export default function CourseDetailsPage() {
       )}
 
       {course.routinePDF && (
-        <a
-          href={course.routinePDF}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 flex items-center gap-2 text-sm text-foreground underline"
-        >
+        <a href={course.routinePDF} target="_blank" rel="noopener noreferrer"
+          className="mt-4 flex items-center gap-2 text-sm text-foreground underline">
           <FileText className="h-4 w-4" />
           Routine PDF
+        </a>
+      )}
+
+      {course.allMaterialsLink && (
+        <a href={course.allMaterialsLink} target="_blank" rel="noopener noreferrer"
+          className="mt-2 flex items-center gap-2 text-sm text-foreground underline">
+          <FileText className="h-4 w-4" />
+          All Materials
         </a>
       )}
 
