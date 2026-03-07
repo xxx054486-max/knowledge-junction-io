@@ -20,6 +20,7 @@ import AdminVideosPage from "@/pages/admin/AdminVideosPage";
 import AdminAddVideoPage from "@/pages/admin/AdminAddVideoPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 import AdminPendingPage from "@/pages/admin/AdminPendingPage";
+import AdminDataPage from "@/pages/admin/AdminDataPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/admin/videos/add" element={<AdminAddVideoPage />} />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 <Route path="/admin/pending" element={<AdminPendingPage />} />
+                <Route path="/admin/data" element={<AdminDataPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

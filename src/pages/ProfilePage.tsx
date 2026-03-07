@@ -1,23 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { LogOut, KeyRound, FileText, MessageCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import { Course } from "@/types";
 
 export default function ProfilePage() {
@@ -27,15 +19,12 @@ export default function ProfilePage() {
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      navigate("/auth?mode=login");
-    }
+    if (!user) navigate("/auth?mode=login");
   }, [user]);
 
   useEffect(() => {
     if (userDoc?.activeCourseId) {
-      import("firebase/firestore").then(async ({ getDoc, doc }) => {
-        const snap = await getDoc(doc(db, "courses", userDoc.activeCourseId));
+      getDoc(doc(db, "courses", userDoc.activeCourseId)).then((snap) => {
         if (snap.exists()) setActiveCourse({ id: snap.id, ...snap.data() } as Course);
       });
     }
@@ -43,18 +32,11 @@ export default function ProfilePage() {
 
   if (!user || !userDoc) return null;
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
+  const handleLogout = async () => { await logout(); navigate("/"); };
 
   const handleResetPassword = async () => {
-    try {
-      await resetPassword(userDoc.email);
-      toast.success("Password reset email sent");
-    } catch {
-      toast.error("Failed to send reset email");
-    }
+    try { await resetPassword(userDoc.email); toast.success("Password reset email sent"); }
+    catch { toast.error("Failed to send reset email"); }
   };
 
   const handleSwitchCourse = async (courseId: string) => {
@@ -79,27 +61,13 @@ export default function ProfilePage() {
           <h3 className="font-semibold text-foreground mb-3">Enrolled Courses</h3>
           <div className="space-y-2">
             {userDoc.enrolledCourses.map((c) => (
-              <div
-                key={c.courseId}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  c.courseId === userDoc.activeCourseId
-                    ? "border-primary bg-accent"
-                    : "border-border bg-card"
-                }`}
-              >
+              <div key={c.courseId} className={`flex items-center justify-between p-3 rounded-lg border ${c.courseId === userDoc.activeCourseId ? "border-primary bg-accent" : "border-border bg-card"}`}>
                 <div className="flex items-center gap-3">
-                  {c.courseThumbnail && (
-                    <img src={c.courseThumbnail} alt="" className="w-10 h-10 rounded-md object-cover" />
-                  )}
+                  {c.courseThumbnail && <img src={c.courseThumbnail} alt="" className="w-10 h-10 rounded-md object-cover" />}
                   <span className="text-sm font-medium text-foreground">{c.courseName}</span>
                 </div>
                 {c.courseId !== userDoc.activeCourseId && userDoc.enrolledCourses.length > 1 && (
-                  <button
-                    onClick={() => handleSwitchCourse(c.courseId)}
-                    className="text-xs px-3 py-1 rounded-md bg-primary text-primary-foreground"
-                  >
-                    Select
-                  </button>
+                  <button onClick={() => handleSwitchCourse(c.courseId)} className="text-xs px-3 py-1 rounded-md bg-primary text-primary-foreground">Select</button>
                 )}
               </div>
             ))}
@@ -109,27 +77,27 @@ export default function ProfilePage() {
 
       {/* Quick Links */}
       <div className="mt-6 space-y-2">
+        {activeCourse?.allMaterialsLink && (
+          <a href={activeCourse.allMaterialsLink} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            All Materials
+            <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
+          </a>
+        )}
+
         {activeCourse?.routinePDF && (
-          <a
-            href={activeCourse.routinePDF}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground"
-          >
+          <a href={activeCourse.routinePDF} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground">
             <FileText className="h-4 w-4 text-muted-foreground" />
             Routine PDF
             <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
           </a>
         )}
 
-        {activeCourse?.discussionGroups?.map((g, i) => (
-          <a
-            key={i}
-            href={g.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground"
-          >
+        {activeCourse?.discussionGroups?.filter(g => g.name && g.link).map((g, i) => (
+          <a key={i} href={g.link} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground">
             <MessageCircle className="h-4 w-4 text-muted-foreground" />
             {g.name}
             <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
@@ -139,10 +107,8 @@ export default function ProfilePage() {
 
       {/* Actions */}
       <div className="mt-6 space-y-2">
-        <button
-          onClick={handleResetPassword}
-          className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg text-sm text-foreground"
-        >
+        <button onClick={handleResetPassword}
+          className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg text-sm text-foreground">
           <KeyRound className="h-4 w-4 text-muted-foreground" />
           Reset Password
         </button>

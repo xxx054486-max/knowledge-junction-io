@@ -35,21 +35,24 @@ export function TopNav({ onMenuClick }: Props) {
           <button onClick={onMenuClick} className="text-foreground">
             <Menu className="h-5 w-5" />
           </button>
+          {settings.appLogo && (
+            <img src={settings.appLogo} alt="" className="h-7 w-7 rounded-md object-contain" />
+          )}
           <h1 className="text-lg font-semibold text-foreground">
             {settings.appName || "LMS"}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {installPrompt && (
             <button
               onClick={handleInstall}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground"
+              className="p-2 text-foreground rounded-md hover:bg-accent"
+              title="Install App"
             >
-              <Download className="h-4 w-4" />
-              Install
+              <Download className="h-5 w-5" />
             </button>
           )}
-          <button onClick={toggle} className="p-2 text-foreground rounded-md">
+          <button onClick={toggle} className="p-2 text-foreground rounded-md hover:bg-accent">
             {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
         </div>

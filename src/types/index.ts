@@ -51,6 +51,7 @@ export interface Course {
   instructors: Instructor[];
   discussionGroups: DiscussionGroup[];
   routinePDF: string;
+  allMaterialsLink: string;
   createdAt: Timestamp;
 }
 
