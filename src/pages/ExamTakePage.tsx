@@ -266,8 +266,8 @@ export default function ExamTakePage() {
           })}
         </div>
 
-        {/* Rankings - only after exam ends */}
-        {examEnded && (
+        {/* Rankings - only after exam ends AND result published */}
+        {examEnded && exam.resultPublished && (
           <div className="mt-6">
             {!showRankings ? (
               <button onClick={loadRankings} className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-medium flex items-center justify-center gap-2">
