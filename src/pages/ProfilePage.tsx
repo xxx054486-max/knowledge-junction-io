@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { doc, updateDoc, getDoc, addDoc, collection, getDocs, arrayUnion, Timestamp, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { LogOut, KeyRound, FileText, MessageCircle, ExternalLink, PlusCircle, Copy, Check, ClipboardList } from "lucide-react";
+import { LogOut, KeyRound, FileText, MessageCircle, ExternalLink, PlusCircle, Copy, Check, ClipboardList, Lock, Clock } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -53,7 +53,6 @@ export default function ProfilePage() {
     }
   }, [enrollOpen]);
 
-  // Fetch enrollment request statuses for enrolled courses
   useEffect(() => {
     if (user && userDoc?.enrolledCourses?.length) {
       getDocs(query(collection(db, "enrollRequests"), where("userId", "==", user.uid))).then((snap) => {
@@ -71,6 +70,7 @@ export default function ProfilePage() {
 
   const enrolledIds = userDoc.enrolledCourses?.map((c) => c.courseId) || [];
   const availableCourses = allCourses.filter((c) => !enrolledIds.includes(c.id));
+  const isActiveApproved = activeCourse && courseRequestStatuses[activeCourse.id] === "approved";
 
   const handleLogout = async () => { await logout(); navigate("/"); };
   const handleResetPassword = async () => {
@@ -90,52 +90,32 @@ export default function ProfilePage() {
   };
 
   const resetEnrollForm = () => {
-    setSelectedCourse(null);
-    setPaymentMethod("");
-    setPaymentNumber("");
-    setTransactionId("");
-    setScreenshotFile(null);
+    setSelectedCourse(null); setPaymentMethod(""); setPaymentNumber(""); setTransactionId(""); setScreenshotFile(null);
   };
 
   const handleEnrollSubmit = async () => {
     if (!selectedCourse) { toast.error("Please select a course"); return; }
     if (!paymentMethod && settings.paymentMethods?.length > 0) { toast.error("Please select a payment method"); return; }
-
     setSubmitting(true);
     try {
       let screenshotUrl = "";
       if (screenshotFile) screenshotUrl = await uploadToImgBB(screenshotFile);
-
       await addDoc(collection(db, "enrollRequests"), {
-        userId: user.uid,
-        name: userDoc.name,
-        email: userDoc.email,
-        courseId: selectedCourse.id,
-        courseName: selectedCourse.courseName,
-        paymentMethod,
-        paymentNumber,
-        transactionId,
-        screenshot: screenshotUrl,
-        status: "pending",
-        createdAt: Timestamp.now(),
+        userId: user.uid, name: userDoc.name, email: userDoc.email,
+        courseId: selectedCourse.id, courseName: selectedCourse.courseName,
+        paymentMethod, paymentNumber, transactionId, screenshot: screenshotUrl,
+        status: "pending", createdAt: Timestamp.now(),
       });
-
       await updateDoc(doc(db, "users", user.uid), {
         enrolledCourses: arrayUnion({
-          courseId: selectedCourse.id,
-          courseName: selectedCourse.courseName,
-          courseThumbnail: selectedCourse.thumbnail || "",
-          enrolledAt: Timestamp.now(),
+          courseId: selectedCourse.id, courseName: selectedCourse.courseName,
+          courseThumbnail: selectedCourse.thumbnail || "", enrolledAt: Timestamp.now(),
         }),
       });
-
       await refreshUserDoc();
       toast.success("Enrollment request submitted! Waiting for approval.");
-      setEnrollOpen(false);
-      resetEnrollForm();
-    } catch (err: any) {
-      toast.error(err.message || "Enrollment failed");
-    }
+      setEnrollOpen(false); resetEnrollForm();
+    } catch (err: any) { toast.error(err.message || "Enrollment failed"); }
     setSubmitting(false);
   };
 
@@ -163,7 +143,11 @@ export default function ProfilePage() {
                     {c.courseThumbnail && <img src={c.courseThumbnail} alt="" className="w-10 h-10 rounded-md object-cover" />}
                     <div>
                       <span className="text-sm font-medium text-foreground">{c.courseName}</span>
-                      {isPending && <p className="text-[11px] text-warning">Pending approval</p>}
+                      {isPending && (
+                        <p className="text-[11px] text-warning flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Pending Enrollment
+                        </p>
+                      )}
                     </div>
                   </div>
                   {isApproved && c.courseId !== userDoc.activeCourseId && userDoc.enrolledCourses.length > 1 && (
@@ -185,12 +169,8 @@ export default function ProfilePage() {
             </button>
           </DialogTrigger>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Enroll in a New Course</DialogTitle>
-            </DialogHeader>
-
+            <DialogHeader><DialogTitle>Enroll in a New Course</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
-              {/* Course Selection */}
               {!selectedCourse ? (
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">Select a Course</p>
@@ -199,11 +179,7 @@ export default function ProfilePage() {
                   ) : (
                     <div className="space-y-2">
                       {availableCourses.map((course) => (
-                        <button
-                          key={course.id}
-                          onClick={() => setSelectedCourse(course)}
-                          className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg hover:bg-accent transition-colors text-left"
-                        >
+                        <button key={course.id} onClick={() => setSelectedCourse(course)} className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg hover:bg-accent transition-colors text-left">
                           {course.thumbnail && <img src={course.thumbnail} alt="" className="w-12 h-12 rounded-md object-cover" />}
                           <div>
                             <p className="text-sm font-medium text-foreground">{course.courseName}</p>
@@ -216,7 +192,6 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <>
-                  {/* Selected Course Info */}
                   <div className="p-3 bg-accent border border-border rounded-lg flex items-center gap-3">
                     {selectedCourse.thumbnail && <img src={selectedCourse.thumbnail} alt="" className="w-12 h-12 rounded-md object-cover" />}
                     <div className="flex-1">
@@ -226,7 +201,6 @@ export default function ProfilePage() {
                     <button onClick={() => setSelectedCourse(null)} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
                   </div>
 
-                  {/* Payment Methods */}
                   {settings.paymentMethods?.length > 0 && (
                     <div>
                       <p className="text-sm font-medium text-foreground mb-2">Payment Method</p>
@@ -240,7 +214,7 @@ export default function ProfilePage() {
                             <div className="flex items-center gap-1">
                               <span className="text-sm text-muted-foreground">{pm.number}</span>
                               <button type="button" onClick={() => handleCopy(pm.number)} className="p-1">
-                                {copied === pm.number ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                                {copied === pm.number ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
                               </button>
                             </div>
                           </label>
@@ -249,20 +223,8 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  <input
-                    type="text"
-                    placeholder="Payment Number"
-                    value={paymentNumber}
-                    onChange={(e) => setPaymentNumber(e.target.value)}
-                    className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Transaction ID"
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm"
-                  />
+                  <input type="text" placeholder="Payment Number" value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm" />
+                  <input type="text" placeholder="Transaction ID" value={transactionId} onChange={(e) => setTransactionId(e.target.value)} className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm" />
 
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Payment Screenshot</p>
@@ -270,11 +232,7 @@ export default function ProfilePage() {
                     <ImagePreview file={screenshotFile} />
                   </div>
 
-                  <button
-                    onClick={handleEnrollSubmit}
-                    disabled={submitting}
-                    className="w-full py-3 rounded-md bg-primary text-primary-foreground font-medium text-sm disabled:opacity-50"
-                  >
+                  <button onClick={handleEnrollSubmit} disabled={submitting} className="w-full py-3 rounded-md bg-primary text-primary-foreground font-medium text-sm disabled:opacity-50">
                     {submitting ? "Submitting..." : "Submit Enrollment Request"}
                   </button>
                 </>
@@ -284,45 +242,54 @@ export default function ProfilePage() {
         </Dialog>
       </div>
 
-      {activeCourse && courseRequestStatuses[activeCourse.id] !== "pending" && (
+      {/* Enrolled-only content: All Materials, Discussion Groups, Exams - only for approved */}
+      {isActiveApproved ? (
         <>
-          {activeCourse.allMaterialsLink && (
-            <div className="mt-6">
-              <h3 className="font-semibold text-foreground mb-3">All Materials</h3>
-              <div className="space-y-2">
-                <a href={activeCourse.allMaterialsLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground hover:bg-accent">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  All Materials PDF
-                  <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
-                </a>
-              </div>
-            </div>
-          )}
-
           <div className="mt-6 space-y-2">
-            {activeCourse.routinePDF && (
-              <a href={activeCourse.routinePDF} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground">
-                <FileText className="h-4 w-4 text-muted-foreground" /> Routine PDF
-                <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
+            <h3 className="font-semibold text-foreground mb-2 text-sm flex items-center gap-2">🎓 Course Resources</h3>
+            
+            {activeCourse?.allMaterialsLink && (
+              <a href={activeCourse.allMaterialsLink} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-primary/5 border-2 border-primary/20 rounded-xl text-sm font-medium text-foreground hover:bg-primary/10 transition-colors">
+                <FileText className="h-5 w-5 text-primary" />
+                <span className="flex-1">All Materials</span>
+                <ExternalLink className="h-4 w-4 text-primary" />
               </a>
             )}
-            {activeCourse.discussionGroups?.filter(g => g.name && g.link).map((g, i) => (
+
+            {activeCourse?.routinePDF && (
+              <a href={activeCourse.routinePDF} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-primary/5 border-2 border-primary/20 rounded-xl text-sm font-medium text-foreground hover:bg-primary/10 transition-colors">
+                <FileText className="h-5 w-5 text-primary" /> 
+                <span className="flex-1">Routine PDF</span>
+                <ExternalLink className="h-4 w-4 text-primary" />
+              </a>
+            )}
+
+            {activeCourse?.discussionGroups?.filter(g => g.name && g.link).map((g, i) => (
               <a key={i} href={g.link} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg text-sm text-foreground">
-                <MessageCircle className="h-4 w-4 text-muted-foreground" /> {g.name}
-                <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
+                className="flex items-center gap-3 p-3 bg-primary/5 border-2 border-primary/20 rounded-xl text-sm font-medium text-foreground hover:bg-primary/10 transition-colors">
+                <MessageCircle className="h-5 w-5 text-primary" />
+                <span className="flex-1">{g.name}</span>
+                <ExternalLink className="h-4 w-4 text-primary" />
               </a>
             ))}
+
+            <Link to="/exams" className="flex items-center gap-3 p-3 bg-primary/5 border-2 border-primary/20 rounded-xl text-sm font-medium text-foreground hover:bg-primary/10 transition-colors">
+              <ClipboardList className="h-5 w-5 text-primary" />
+              <span className="flex-1">Exams</span>
+            </Link>
           </div>
         </>
-      )}
+      ) : activeCourse && courseRequestStatuses[activeCourse.id] === "pending" ? (
+        <div className="mt-6 bg-warning/10 border border-warning/30 rounded-xl p-4 text-center space-y-2">
+          <Clock className="h-6 w-6 text-warning mx-auto" />
+          <p className="text-sm text-warning font-medium">Enrollment Pending</p>
+          <p className="text-xs text-muted-foreground">Course resources will be available after approval.</p>
+        </div>
+      ) : null}
 
       <div className="mt-6 space-y-2">
-        <Link to="/exams" className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg text-sm text-foreground hover:bg-accent">
-          <ClipboardList className="h-4 w-4 text-muted-foreground" /> Exams
-        </Link>
         <button onClick={handleResetPassword} className="flex items-center gap-3 w-full p-3 bg-card border border-border rounded-lg text-sm text-foreground">
           <KeyRound className="h-4 w-4 text-muted-foreground" /> Reset Password
         </button>

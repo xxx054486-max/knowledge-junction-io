@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, addDoc, collection, updateDoc, arrayUnion, Timestamp } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, updateDoc, arrayUnion, Timestamp, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Course } from "@/types";
 import { uploadToImgBB } from "@/lib/imgbb";
-import { Copy, Check, Eye, EyeOff } from "lucide-react";
+import { Copy, Check, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { ImagePreview } from "@/components/ImagePreview";
 
@@ -23,11 +23,7 @@ function PasswordInput({ value, onChange, placeholder }: { value: string; onChan
         minLength={6}
         className="w-full px-4 py-3 pr-12 rounded-md bg-card border border-border text-foreground text-sm"
       />
-      <button
-        type="button"
-        onClick={() => setShow(!show)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-      >
+      <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
     </div>
@@ -51,7 +47,11 @@ export default function AuthPage() {
   const [paymentNumber, setPaymentNumber] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotUrl, setScreenshotUrl] = useState("");
+  const [uploadMode, setUploadMode] = useState<"file" | "url">("file");
   const [course, setCourse] = useState<Course | null>(null);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(courseId);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -63,12 +63,23 @@ export default function AuthPage() {
   }, [user, userDoc]);
 
   useEffect(() => {
-    if (courseId) {
-      getDoc(doc(db, "courses", courseId)).then((snap) => {
-        if (snap.exists()) setCourse({ id: snap.id, ...snap.data() } as Course);
-      });
-    }
+    // Load all courses for dropdown
+    getDocs(collection(db, "courses")).then((snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+      setAllCourses(list);
+      if (courseId) {
+        const found = list.find(c => c.id === courseId);
+        if (found) setCourse(found);
+      }
+    });
   }, [courseId]);
+
+  useEffect(() => {
+    if (selectedCourseId && allCourses.length > 0) {
+      const found = allCourses.find(c => c.id === selectedCourseId);
+      if (found) setCourse(found);
+    }
+  }, [selectedCourseId, allCourses]);
 
   useEffect(() => { setIsLogin(mode === "login"); }, [mode]);
 
@@ -92,25 +103,27 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!courseId || !course) { toast.error("Please select a course first"); return; }
+    if (!selectedCourseId || !course) { toast.error("Please select a course first"); return; }
     setSubmitting(true);
     try {
-      let screenshotUrl = "";
-      if (screenshotFile) screenshotUrl = await uploadToImgBB(screenshotFile);
+      let finalScreenshotUrl = screenshotUrl;
+      if (uploadMode === "file" && screenshotFile) {
+        finalScreenshotUrl = await uploadToImgBB(screenshotFile);
+      }
 
       const userId = await register(email, password, name);
       await addDoc(collection(db, "enrollRequests"), {
-        userId, name, email, courseId, courseName: course.courseName,
-        paymentMethod, paymentNumber, transactionId, screenshot: screenshotUrl,
+        userId, name, email, courseId: selectedCourseId, courseName: course.courseName,
+        paymentMethod, paymentNumber, transactionId, screenshot: finalScreenshotUrl,
         status: "pending", createdAt: Timestamp.now(),
       });
       await updateDoc(doc(db, "users", userId), {
         enrolledCourses: arrayUnion({
-          courseId, courseName: course.courseName,
+          courseId: selectedCourseId, courseName: course.courseName,
           courseThumbnail: course.thumbnail || "", enrolledAt: Timestamp.now(),
         }),
-        activeCourseId: courseId,
-        paymentInfo: { method: paymentMethod, paymentNumber, transactionId, screenshot: screenshotUrl },
+        activeCourseId: selectedCourseId,
+        paymentInfo: { method: paymentMethod, paymentNumber, transactionId, screenshot: finalScreenshotUrl },
       });
       toast.success("Registration successful! Waiting for approval.");
       navigate("/profile");
@@ -164,6 +177,22 @@ export default function AuthPage() {
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm" />
           <PasswordInput value={password} onChange={setPassword} placeholder="Password" />
 
+          {/* Course Dropdown */}
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">Select Course</label>
+            <select
+              value={selectedCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+              required
+              className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm"
+            >
+              <option value="">-- Select a Course --</option>
+              {allCourses.map(c => (
+                <option key={c.id} value={c.id}>{c.courseName} — ৳{c.price}</option>
+              ))}
+            </select>
+          </div>
+
           {course && (
             <div className="p-3 bg-card border border-border rounded-lg flex items-center gap-3">
               {course.thumbnail && <img src={course.thumbnail} alt="" className="w-12 h-12 rounded-md object-cover" />}
@@ -199,10 +228,37 @@ export default function AuthPage() {
           <input type="text" placeholder="Payment Number" value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm" />
           <input type="text" placeholder="Transaction ID" value={transactionId} onChange={(e) => setTransactionId(e.target.value)} className="w-full px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm" />
 
+          {/* Screenshot: File or URL */}
           <div>
-            <p className="text-sm text-muted-foreground mb-1">Payment Screenshot</p>
-            <input type="file" accept="image/*" onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)} className="w-full text-sm text-foreground" />
-            <ImagePreview file={screenshotFile} />
+            <p className="text-sm font-medium text-foreground mb-2">Payment Screenshot</p>
+            <div className="flex gap-2 mb-2">
+              <button type="button" onClick={() => setUploadMode("file")} className={`flex-1 py-2 text-xs font-medium rounded-md border ${uploadMode === "file" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
+                Upload File
+              </button>
+              <button type="button" onClick={() => setUploadMode("url")} className={`flex-1 py-2 text-xs font-medium rounded-md border ${uploadMode === "url" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
+                Image URL
+              </button>
+            </div>
+            {uploadMode === "file" ? (
+              <>
+                <input type="file" accept="image/*" onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)} className="w-full text-sm text-foreground" />
+                <ImagePreview file={screenshotFile} />
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  placeholder="https://i.postimg.cc/..."
+                  value={screenshotUrl}
+                  onChange={(e) => setScreenshotUrl(e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-md bg-card border border-border text-foreground text-sm"
+                />
+                <a href="https://postimages.org" target="_blank" rel="noopener noreferrer"
+                  className="flex-shrink-0 px-3 py-3 rounded-md bg-primary/10 border border-primary/20 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                  <ExternalLink className="h-3 w-3" /> Get URL
+                </a>
+              </div>
+            )}
           </div>
 
           <button type="submit" disabled={submitting} className="w-full py-3 rounded-md bg-primary text-primary-foreground font-medium text-sm disabled:opacity-50">{submitting ? "Registering..." : "Register & Enroll"}</button>

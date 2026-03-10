@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Image, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 
 interface ImageUrlInputProps {
   label?: string;
@@ -9,8 +9,6 @@ interface ImageUrlInputProps {
 }
 
 export function ImageUrlInput({ label, value, onChange, placeholder = "https://..." }: ImageUrlInputProps) {
-  const [showPreview, setShowPreview] = useState(false);
-
   return (
     <div className="space-y-1.5">
       {label && <label className="text-xs font-medium text-muted-foreground">{label}</label>}
@@ -22,6 +20,15 @@ export function ImageUrlInput({ label, value, onChange, placeholder = "https://.
           placeholder={placeholder}
           className="flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all placeholder:text-muted-foreground/60"
         />
+        <a
+          href="https://postimages.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 px-3 py-2.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Get URL
+        </a>
         {value && (
           <button
             type="button"
@@ -33,7 +40,6 @@ export function ImageUrlInput({ label, value, onChange, placeholder = "https://.
         )}
       </div>
 
-      {/* Preview */}
       {value && (
         <div className="relative mt-1.5 inline-block">
           <img
@@ -44,17 +50,6 @@ export function ImageUrlInput({ label, value, onChange, placeholder = "https://.
           />
         </div>
       )}
-
-      {/* PostImages.org helper */}
-      <a
-        href="https://postimages.org"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-[11px] text-primary hover:text-primary/80 transition-colors mt-1"
-      >
-        <ExternalLink className="h-3 w-3" />
-        ইমেজ URL নেই? PostImages.org থেকে আপলোড করুন
-      </a>
     </div>
   );
 }
