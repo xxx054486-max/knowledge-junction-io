@@ -18,7 +18,7 @@ export interface UserDoc {
   name: string;
   email: string;
   role: "student" | "admin";
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "suspended";
   enrolledCourses: EnrolledCourse[];
   activeCourseId: string;
   paymentInfo: PaymentInfo;

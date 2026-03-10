@@ -25,6 +25,7 @@ export interface Exam {
   startTime: Timestamp;
   endTime: Timestamp;
   questions: ExamQuestion[];
+  resultPublished?: boolean;
   createdAt: Timestamp;
 }
 

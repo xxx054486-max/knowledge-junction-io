@@ -304,8 +304,24 @@ export default function AdminExamsPage() {
                         {formatTime12(exam.startTime?.toDate?.())} → {formatTime12(exam.endTime?.toDate?.())}
                       </p>
                       <p className="text-xs text-muted-foreground">Duration: {exam.duration} min</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${exam.resultPublished ? "bg-success/10 text-success" : "bg-accent text-muted-foreground"}`}>
+                          {exam.resultPublished ? "Result Published" : "Result Not Published"}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      <button 
+                        onClick={async () => {
+                          await updateDoc(doc(examDb, "exams", exam.id), { resultPublished: !exam.resultPublished });
+                          toast.success(exam.resultPublished ? "Result unpublished" : "Result published");
+                          fetchExams();
+                        }}
+                        title={exam.resultPublished ? "Unpublish Result" : "Publish Result"}
+                        className={`p-2 hover:bg-accent rounded-lg ${exam.resultPublished ? "text-success" : "text-muted-foreground"}`}
+                      >
+                        <Trophy className="h-4 w-4" />
+                      </button>
                       <button onClick={() => exportExams([exam])} title="Export" className="p-2 hover:bg-accent rounded-lg"><Download className="h-4 w-4 text-muted-foreground" /></button>
                       <button onClick={() => viewResults(exam)} className="p-2 hover:bg-accent rounded-lg"><Eye className="h-4 w-4 text-muted-foreground" /></button>
                       <button onClick={() => navigate(`/admin/exams/add?edit=${exam.id}`)} className="p-2 hover:bg-accent rounded-lg"><Edit className="h-4 w-4 text-muted-foreground" /></button>

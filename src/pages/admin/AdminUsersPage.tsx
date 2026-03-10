@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { collection, getDocs, updateDoc, deleteDoc, doc, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { UserDoc, EnrollRequest } from "@/types";
+import { UserDoc, EnrollRequest, Course } from "@/types";
 import { toast } from "sonner";
-import { Check, X, Trash2, Eye, ChevronLeft, Search, Users, BookOpen } from "lucide-react";
+import { Check, X, Trash2, Eye, ChevronLeft, Search, Users, BookOpen, Ban, ShieldCheck, Clock, UserX, Filter } from "lucide-react";
 import { AdminListSkeleton } from "@/components/skeletons/AdminSkeleton";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -14,32 +14,31 @@ import { ImagePreview } from "@/components/ImagePreview";
 
 interface UserWithId extends UserDoc { id: string; }
 
-interface UserEnrollments {
-  user: UserWithId;
-  enrollRequests: EnrollRequest[];
-}
-
-type StatusFilter = "all" | "pending" | "approved" | "rejected";
+type StatusFilter = "all" | "pending" | "approved" | "rejected" | "suspended";
 
 export default function AdminUsersPage() {
   const [searchParams] = useSearchParams();
   const [users, setUsers] = useState<UserWithId[]>([]);
   const [enrollRequests, setEnrollRequests] = useState<EnrollRequest[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const initialStatus = (searchParams.get("status") as StatusFilter) || "all";
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    ["all", "pending", "approved", "rejected"].includes(initialStatus) ? initialStatus : "all"
+    ["all", "pending", "approved", "rejected", "suspended"].includes(initialStatus) ? initialStatus : "all"
   );
+  const [courseFilter, setCourseFilter] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserWithId | null>(null);
 
   const fetchData = async () => {
-    const [usersSnap, requestsSnap] = await Promise.all([
+    const [usersSnap, requestsSnap, coursesSnap] = await Promise.all([
       getDocs(collection(db, "users")),
       getDocs(collection(db, "enrollRequests")),
+      getDocs(collection(db, "courses")),
     ]);
     setUsers(usersSnap.docs.map((d) => ({ id: d.id, ...d.data() } as UserWithId)));
     setEnrollRequests(requestsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as EnrollRequest)));
+    setCourses(coursesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Course)));
     setLoading(false);
   };
 
@@ -47,29 +46,32 @@ export default function AdminUsersPage() {
 
   const getUserRequests = (userId: string) => enrollRequests.filter(r => r.userId === userId);
   const hasPendingRequest = (userId: string) => getUserRequests(userId).some(r => r.status === "pending");
-  const hasApprovedRequest = (userId: string) => getUserRequests(userId).some(r => r.status === "approved");
 
-  const handleApprove = async (userId: string) => {
-    await updateDoc(doc(db, "users", userId), { status: "approved" });
-    toast.success("User approved");
+  const handleStatusChange = async (userId: string, status: string) => {
+    await updateDoc(doc(db, "users", userId), { status });
+    toast.success(`User ${status}`);
     fetchData();
   };
 
-  const handleReject = async (userId: string) => {
-    await updateDoc(doc(db, "users", userId), { status: "rejected" });
-    toast.success("User rejected");
+  const handleToggleActive = async (userId: string, isActive: boolean) => {
+    await updateDoc(doc(db, "users", userId), { isActive });
+    toast.success(isActive ? "User activated" : "User deactivated");
     fetchData();
   };
 
   const handleDelete = async (userId: string) => {
     await deleteDoc(doc(db, "users", userId));
+    // Also delete related enroll requests
+    const userReqs = enrollRequests.filter(r => r.userId === userId);
+    for (const req of userReqs) {
+      await deleteDoc(doc(db, "enrollRequests", req.id));
+    }
     toast.success("User deleted");
     fetchData();
   };
 
   const handleApproveRequest = async (reqId: string, userId: string, courseName: string) => {
     await updateDoc(doc(db, "enrollRequests", reqId), { status: "approved" });
-    // Ensure user is approved
     const userDoc = users.find(u => u.id === userId);
     if (userDoc?.status !== "approved") {
       await updateDoc(doc(db, "users", userId), { status: "approved" });
@@ -84,6 +86,15 @@ export default function AdminUsersPage() {
     fetchData();
   };
 
+  // Change user's course
+  const handleChangeCourse = async (userId: string, newCourseId: string) => {
+    const course = courses.find(c => c.id === newCourseId);
+    if (!course) return;
+    await updateDoc(doc(db, "users", userId), { activeCourseId: newCourseId });
+    toast.success(`Active course changed to ${course.courseName}`);
+    fetchData();
+  };
+
   const filtered = users.filter((u) => {
     if (u.role === "admin") return false;
     const matchesSearch =
@@ -94,7 +105,8 @@ export default function AdminUsersPage() {
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "pending" ? (u.status === "pending" || userHasPendingRequest) : u.status === statusFilter);
-    return matchesSearch && matchesStatus;
+    const matchesCourse = !courseFilter || u.enrolledCourses?.some(c => c.courseId === courseFilter) || u.activeCourseId === courseFilter;
+    return matchesSearch && matchesStatus && matchesCourse;
   });
 
   const students = users.filter(u => u.role !== "admin");
@@ -103,6 +115,7 @@ export default function AdminUsersPage() {
     pending: students.filter(u => u.status === "pending" || hasPendingRequest(u.id)).length,
     approved: students.filter(u => u.status === "approved").length,
     rejected: students.filter(u => u.status === "rejected").length,
+    suspended: students.filter(u => u.status === "suspended").length,
   };
 
   if (loading) return <AdminListSkeleton count={6} />;
@@ -112,7 +125,6 @@ export default function AdminUsersPage() {
     const userRequests = getUserRequests(selectedUser.id);
     const pendingReqs = userRequests.filter(r => r.status === "pending");
     const approvedReqs = userRequests.filter(r => r.status === "approved");
-    const rejectedReqs = userRequests.filter(r => r.status === "rejected");
 
     return (
       <div className="p-3 sm:p-4 animate-fade-in max-w-2xl mx-auto overflow-x-hidden">
@@ -130,6 +142,7 @@ export default function AdminUsersPage() {
               <span className={`inline-block mt-1 text-xs px-2.5 py-0.5 rounded-full font-medium ${
                 selectedUser.status === "approved" ? "bg-success/10 text-success" :
                 selectedUser.status === "pending" ? "bg-warning/10 text-warning" :
+                selectedUser.status === "suspended" ? "bg-orange-500/10 text-orange-500" :
                 "bg-destructive/10 text-destructive"
               }`}>
                 {selectedUser.status}
@@ -139,6 +152,7 @@ export default function AdminUsersPage() {
 
           <div className="p-4 sm:p-6 space-y-5 overflow-y-auto max-h-[60vh]">
             <DetailRow label="Role" value={selectedUser.role} />
+            <DetailRow label="Active" value={(selectedUser as any).isActive !== false ? "Yes" : "No"} />
             <DetailRow label="Created At" value={selectedUser.createdAt?.toDate?.()?.toLocaleString?.() || "—"} />
 
             {/* Enrolled Courses */}
@@ -160,8 +174,7 @@ export default function AdminUsersPage() {
                           <span className="text-sm text-foreground truncate block">{c.courseName}</span>
                           <span className={`text-[11px] ${
                             reqStatus === "approved" ? "text-success" :
-                            reqStatus === "pending" ? "text-warning" :
-                            "text-destructive"
+                            reqStatus === "pending" ? "text-warning" : "text-destructive"
                           }`}>{reqStatus}</span>
                         </div>
                         {reqStatus === "pending" && courseReq && (
@@ -177,7 +190,23 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            {/* Pending Enrollment Requests with Payment Details */}
+            {/* Change Active Course */}
+            {selectedUser.enrolledCourses?.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Change Active Course</p>
+                <select
+                  value={selectedUser.activeCourseId || ""}
+                  onChange={(e) => handleChangeCourse(selectedUser.id, e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-foreground text-sm"
+                >
+                  {selectedUser.enrolledCourses.map(c => (
+                    <option key={c.courseId} value={c.courseId}>{c.courseName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Pending Payment Details */}
             {pendingReqs.length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Pending Payment Details</p>
@@ -203,7 +232,7 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            {/* Approved Enrollment Details */}
+            {/* Approved Details */}
             {approvedReqs.length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-2">Approved Enrollments</p>
@@ -216,6 +245,12 @@ export default function AdminUsersPage() {
                     <div className="ml-6 space-y-1.5">
                       <DetailRow label="Payment Method" value={req.paymentMethod} />
                       <DetailRow label="Transaction ID" value={req.transactionId} />
+                      {req.screenshot && (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Screenshot</p>
+                          <ImagePreview file={null} url={req.screenshot} size="lg" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -241,25 +276,41 @@ export default function AdminUsersPage() {
             )}
           </div>
 
+          {/* Action buttons */}
           <div className="p-4 border-t border-border flex gap-2 flex-wrap">
             {selectedUser.status !== "approved" && (
-              <button onClick={() => { handleApprove(selectedUser.id); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-success/10 text-success font-medium transition-colors hover:bg-success/20">
-                Approve
+              <button onClick={() => { handleStatusChange(selectedUser.id, "approved"); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-success/10 text-success font-medium transition-colors hover:bg-success/20 flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" /> Approve
               </button>
             )}
             {selectedUser.status !== "rejected" && (
-              <button onClick={() => { handleReject(selectedUser.id); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-warning/10 text-warning font-medium transition-colors hover:bg-warning/20">
-                Reject
+              <button onClick={() => { handleStatusChange(selectedUser.id, "rejected"); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-warning/10 text-warning font-medium transition-colors hover:bg-warning/20 flex items-center gap-1.5">
+                <UserX className="h-3.5 w-3.5" /> Reject
               </button>
             )}
+            {selectedUser.status !== "suspended" && (
+              <button onClick={() => { handleStatusChange(selectedUser.id, "suspended"); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-orange-500/10 text-orange-500 font-medium transition-colors hover:bg-orange-500/20 flex items-center gap-1.5">
+                <Ban className="h-3.5 w-3.5" /> Suspend
+              </button>
+            )}
+            {selectedUser.status !== "pending" && (
+              <button onClick={() => { handleStatusChange(selectedUser.id, "pending"); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-accent text-muted-foreground font-medium transition-colors hover:bg-accent/80 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" /> Set Pending
+              </button>
+            )}
+            <button onClick={() => { handleToggleActive(selectedUser.id, (selectedUser as any).isActive === false); setSelectedUser(null); }} className="px-4 py-2 text-sm rounded-lg bg-accent text-foreground font-medium transition-colors hover:bg-accent/80 flex items-center gap-1.5">
+              {(selectedUser as any).isActive === false ? <><ShieldCheck className="h-3.5 w-3.5" /> Activate</> : <><Ban className="h-3.5 w-3.5" /> Deactivate</>}
+            </button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <button className="px-4 py-2 text-sm rounded-lg bg-destructive/10 text-destructive font-medium transition-colors hover:bg-destructive/20">Delete</button>
+                <button className="px-4 py-2 text-sm rounded-lg bg-destructive/10 text-destructive font-medium transition-colors hover:bg-destructive/20 flex items-center gap-1.5">
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete User</AlertDialogTitle>
-                  <AlertDialogDescription>This will permanently delete {selectedUser.name}.</AlertDialogDescription>
+                  <AlertDialogDescription>This will permanently delete {selectedUser.name} and all their enrollment requests.</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -292,8 +343,17 @@ export default function AdminUsersPage() {
         />
       </div>
 
+      {/* Course filter */}
+      <div className="mb-3">
+        <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm">
+          <option value="">All Courses</option>
+          {courses.map(c => <option key={c.id} value={c.id}>{c.courseName}</option>)}
+        </select>
+      </div>
+
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-        {(["all", "pending", "approved", "rejected"] as StatusFilter[]).map((status) => (
+        {(["all", "pending", "approved", "rejected", "suspended"] as StatusFilter[]).map((status) => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
@@ -335,6 +395,7 @@ export default function AdminUsersPage() {
               <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
                 u.status === "approved" ? "bg-success/10 text-success" :
                 u.status === "pending" ? "bg-warning/10 text-warning" :
+                u.status === "suspended" ? "bg-orange-500/10 text-orange-500" :
                 "bg-destructive/10 text-destructive"
               }`}>
                 {u.status}
