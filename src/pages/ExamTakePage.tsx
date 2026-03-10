@@ -308,6 +308,12 @@ export default function ExamTakePage() {
             )}
           </div>
         )}
+        {examEnded && !exam.resultPublished && (
+          <div className="mt-6 bg-accent/50 border border-border rounded-xl p-4 text-center">
+            <Clock className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Result has not been published yet. Please wait for the admin to publish results.</p>
+          </div>
+        )}
       </div>
     );
   }
